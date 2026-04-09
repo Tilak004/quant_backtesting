@@ -18,9 +18,9 @@ from backtester import run_backtest, DEFAULT_PARAMS
 from analysis  import compute_metrics
 
 # ── Date splits ───────────────────────────────────────────────────────────────
-IS_START  = "2019-01-01"
-IS_END    = "2022-12-31"
-OOS_START = "2023-01-01"
+IS_START  = "2016-01-01"
+IS_END    = "2020-12-31"
+OOS_START = "2021-01-01"
 OOS_END   = "2026-04-30"
 
 # ── Parameter grid ────────────────────────────────────────────────────────────

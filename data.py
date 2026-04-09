@@ -15,18 +15,35 @@ warnings.filterwarnings("ignore")
 
 # ── Configuration ──────────────────────────────────────────────────────────────
 TICKERS = [
-    # ── Core large-caps ────────────────────────────────────────────────────────
+    # ── YOUR ORIGINAL LIST (Core & User Watchlist) ──────────────────────────
     "HDFCBANK.NS",   "INFY.NS",       "ICICIBANK.NS",
     "SBIN.NS",       "WIPRO.NS",      "SUNPHARMA.NS",  "LT.NS",
-    # ── User watchlist ─────────────────────────────────────────────────────────
     "BHARTIARTL.NS", "DIXON.NS",      "BSE.NS",
     "CANBK.NS",      "BEL.NS",        "HAL.NS",
-    # ── Additional trending NSE names (sample-size expansion) ──────────────────
     "TITAN.NS",      "BAJFINANCE.NS", "HCLTECH.NS",
-    "TRENT.NS",      "PERSISTENT.NS",    "SIEMENS.NS",
+    "TRENT.NS",      "PERSISTENT.NS", "SIEMENS.NS",
+
+    # ── ENERGY & UTILITIES ──────────────────────────────────────────────────
+    "RELIANCE.NS",   "NTPC.NS",       "ONGC.NS",       "POWERGRID.NS",
+    
+    # ── FMCG (Defensives for "War" Stress Testing) ──────────────────────────
+    "ITC.NS",        "HUL.NS",        "NESTLEIND.NS",  "BRITANNIA.NS",
+    
+    # ── AUTO (High-Beta Trenders) ───────────────────────────────────────────
+    "M&M.NS",        "MARUTI.NS",     "TATAMOTORS.NS", "HEROMOTOCO.NS",
+    
+    # ── METALS & COMMODITIES ───────────────────────────────────────────────
+    "TATASTEEL.NS",  "JINDALSTEL.NS", "HINDALCO.NS",   "COALINDIA.NS",
+    
+    # ── PHARMA & HEALTHCARE ────────────────────────────────────────────────
+    "CIPLA.NS",      "DRREDDY.NS",    "APOLLOHOSP.NS",
+    
+    # ── NEW-AGE TECH & SPECIALIZED SERVICES ─────────────────────────────────
+    "ZOMATO.NS",     "TATAELXSI.NS",  "KPITTECH.NS"
 ]
+
 NIFTY_TICKER   = "^NSEI"
-START_DATE     = "2019-01-01"
+START_DATE     = "2016-01-01"
 END_DATE       = "2026-04-30"
 MAX_MISSING_PCT = 0.05          # skip ticker if >5 % bars missing
 
