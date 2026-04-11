@@ -1,0 +1,73 @@
+# =============================================================================
+# NSE Quant Backtest — .gitignore
+# =============================================================================
+
+# ── SECRETS — NEVER commit these ─────────────────────────────────────────────
+.env                    # Gmail credentials, API keys
+*.pem
+*.key
+secrets/
+
+# .env.example is safe to commit (it has no real values)
+!.env.example
+
+# ── DOWNLOADED MARKET DATA ───────────────────────────────────────────────────
+# These CSVs are large, can be regenerated any time with:  python data.py
+data/raw/
+data/
+
+# ── BACKTEST OUTPUT ───────────────────────────────────────────────────────────
+# Trade CSVs and charts are generated output — not source code.
+# Re-run main.py to reproduce them.
+results/trades_*.csv
+results/OOS_best.csv
+results/charts/
+# Keep the summary report if you want to version-control results
+# results/summary_report.md  ← uncomment this line to also exclude it
+
+# ── PYTHON CACHE ──────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]               # .pyc  .pyo  .pyd
+*.pyo
+*.pyd
+*$py.class
+
+# ── VIRTUAL ENVIRONMENTS ──────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+.virtualenv/
+
+# ── BUILD & DISTRIBUTION ──────────────────────────────────────────────────────
+*.egg-info/
+dist/
+build/
+*.egg
+*.whl
+MANIFEST
+
+# ── JUPYTER NOTEBOOKS (checkpoints) ──────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+
+# ── IDE & EDITOR FILES ────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.suo
+*.user
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── LOGS & TEMP FILES ─────────────────────────────────────────────────────────
+*.log
+*.tmp
+*.bak
+logs/
+
+# ── WINDOWS SPECIFIC ──────────────────────────────────────────────────────────
+desktop.ini
+ehthumbs.db

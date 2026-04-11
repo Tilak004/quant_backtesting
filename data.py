@@ -39,7 +39,44 @@ TICKERS = [
     "CIPLA.NS",      "DRREDDY.NS",    "APOLLOHOSP.NS",
     
     # ── NEW-AGE TECH & SPECIALIZED SERVICES ─────────────────────────────────
-    "ZOMATO.NS",     "TATAELXSI.NS",  "KPITTECH.NS"
+    "ETERNAL.NS",    "TATAELXSI.NS",  "KPITTECH.NS", 
+
+    # ── BANKING & NBFC (Expanded) ────────────────────────────────────────────
+    "KOTAKBANK.NS",  "AXISBANK.NS",   "INDUSINDBK.NS", "BANDHANBNK.NS",
+    "BAJAJFINSV.NS", "CHOLAFIN.NS",   "MUTHOOTFIN.NS",
+
+    # ── IT & SOFTWARE (Expanded) ─────────────────────────────────────────────
+    "TCS.NS",        "TECHM.NS",      "MPHASIS.NS",    "LTIM.NS",
+    "COFORGE.NS",    "OFSS.NS",
+
+    # ── CAPITAL GOODS & INFRA ────────────────────────────────────────────────
+    "ABB.NS",        "BHEL.NS",       "CUMMINSIND.NS", "THERMAX.NS",
+    "POLYCAB.NS",    "KEI.NS",
+
+    # ── CHEMICALS & SPECIALTY ────────────────────────────────────────────────
+    "PIDILITIND.NS", "AARTIIND.NS",   "DEEPAKNITR.NS",
+    "NAVINFLUOR.NS", "ALKYLAMINE.NS",
+
+    # ── CONSUMER DURABLES & RETAIL ───────────────────────────────────────────
+    "HAVELLS.NS",    "VOLTAS.NS",     "VGUARD.NS",
+    "DMART.NS",      "NYKAA.NS",
+
+    # ── PHARMA & DIAGNOSTICS (Expanded) ─────────────────────────────────────
+    "TORNTPHARM.NS", "AUROPHARMA.NS", "LALPATHLAB.NS",
+    "METROPOLIS.NS", "IPCALAB.NS",
+
+    # ── OIL, GAS & POWER (Expanded) ──────────────────────────────────────────
+    "BPCL.NS",       "IOC.NS",        "GAIL.NS",
+    "TATAPOWER.NS",  "ADANIGREEN.NS", "ADANIPORTS.NS",
+
+    # ── INSURANCE ────────────────────────────────────────────────────────────
+    "HDFCLIFE.NS",   "SBILIFE.NS",    "ICICIGI.NS",
+
+    # ── CEMENT ───────────────────────────────────────────────────────────────
+    "ULTRACEMCO.NS", "SHREECEM.NS",   "AMBUJACEM.NS",  "ACC.NS",
+
+    # ── MEDIA & TELECOM ──────────────────────────────────────────────────────
+    "INDUSTOWER.NS", "IDEA.NS",       "ZEEL.NS",
 ]
 
 NIFTY_TICKER   = "^NSEI"

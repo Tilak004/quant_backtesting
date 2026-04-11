@@ -1,0 +1,7 @@
+# Additional dependencies for the alert bot
+# Install with:  pip install -r requirements_bot.txt
+#
+# (The base backtest requirements.txt must also be installed first)
+
+python-dotenv>=1.0.0
+schedule>=1.2.1

@@ -1,0 +1,513 @@
+//@version=5
+strategy("NSE Swing v5 – Pro UI",
+     overlay=true,
+     default_qty_type=strategy.percent_of_equity,
+     default_qty_value=2,
+     commission_type=strategy.commission.percent,
+     commission_value=0.05,
+     slippage=2)
+
+// ─── INPUTS ───────────────────────────────────────────────────────────────────
+grp_ema  = "Trend EMAs"
+e21_len  = input.int(21,  "EMA 21",  group=grp_ema)
+e50_len  = input.int(50,  "EMA 50",  group=grp_ema)
+e200_len = input.int(200, "EMA 200", group=grp_ema)
+
+grp_fil  = "Filters"
+rsi_len  = input.int(14,    "RSI Length",          group=grp_fil)
+adx_len  = input.int(14,    "ADX Length",          group=grp_fil)
+adx_long = input.int(12,    "Min ADX – Longs",     group=grp_fil)
+adx_short= input.int(20,    "Min ADX – Shorts",    group=grp_fil)
+vol_len  = input.int(20,    "Volume MA Length",    group=grp_fil)
+vol_long = input.float(1.1, "Volume mult – Longs", group=grp_fil, step=0.05)
+vol_short= input.float(1.3, "Volume mult – Shorts",group=grp_fil, step=0.1)
+
+grp_htf  = "Higher Timeframe"
+use_htf  = input.bool(true, "Enable Weekly soft filter", group=grp_htf)
+
+grp_risk = "Risk Management"
+atr_len      = input.int(14,    "ATR Length",             group=grp_risk)
+sl_mult      = input.float(2.0, "SL  (ATR×) – wider",    group=grp_risk, step=0.1)
+tp_mult_long = input.float(3.5, "TP  (ATR×) – Longs",    group=grp_risk, step=0.1)
+tp_short     = input.float(2.25,"TP  (ATR×) – Shorts",   group=grp_risk, step=0.1)
+trail_atr    = input.float(1.0, "Trail activates (ATR×)", group=grp_risk, step=0.1)
+trail_offset = input.float(1.5, "Trail offset  (ATR×)",   group=grp_risk, step=0.1)
+
+grp_entry = "Entry Settings"
+use_pb    = input.bool(true,   "Enable Pullback entries",  group=grp_entry)
+use_bo    = input.bool(true,   "Enable Breakout entries",  group=grp_entry)
+bo_period = input.int(12,     "Breakout lookback (bars)", group=grp_entry)
+pb_tol    = input.float(1.008, "Pullback zone tolerance",  group=grp_entry, step=0.001)
+
+grp_short = "Short Filters"
+room_bars    = input.int(50,    "Swing low lookback",       group=grp_short)
+min_room_atr = input.float(3.0, "Min room to fall (ATR×)", group=grp_short, step=0.1)
+di_gap_min   = input.float(5.0, "Min DI- lead over DI+",   group=grp_short, step=0.5)
+
+// ─── CALCULATIONS ─────────────────────────────────────────────────────────────
+ema21  = ta.ema(close, e21_len)
+ema50  = ta.ema(close, e50_len)
+ema200 = ta.ema(close, e200_len)
+
+rsi    = ta.rsi(close, rsi_len)
+[diplus, diminus, adx_val] = ta.dmi(adx_len, adx_len)
+atr    = ta.atr(atr_len)
+vol_ma = ta.sma(volume, vol_len)
+
+// ─── WEEKLY SOFT FILTER ───────────────────────────────────────────────────────
+weekly_ema50 = request.security(syminfo.tickerid, "W",
+                 ta.ema(close, 50), lookahead=barmerge.lookahead_off)
+weekly_bull  = close > weekly_ema50
+weekly_bear  = close < weekly_ema50
+
+rsi_pb_long_lo = use_htf and not weekly_bull ? 43 : 35
+rsi_pb_long_hi = use_htf and not weekly_bull ? 57 : 62
+rsi_bo_long_lo = use_htf and not weekly_bull ? 53 : 48
+rsi_bo_long_hi = use_htf and not weekly_bull ? 70 : 75
+
+// ─── MESH STATE ───────────────────────────────────────────────────────────────
+green_mesh        = ema21 > ema50
+red_mesh          = ema21 < ema50
+mesh_breaks_red   = ta.crossunder(ema21, ema50)
+mesh_breaks_green = ta.crossover(ema21, ema50)
+
+// ─── MESH DURATION COUNTER ────────────────────────────────────────────────────
+var int mesh_bars = 0
+if green_mesh
+    mesh_bars := green_mesh[1] ? mesh_bars + 1 : 1
+else
+    mesh_bars := red_mesh[1] ? mesh_bars + 1 : 1
+
+// ─── 3H TREND ─────────────────────────────────────────────────────────────────
+ema21_slope = ema21 - ema21[5]
+ema50_slope = ema50 - ema50[5]
+
+bull_trend = green_mesh and ema50 > ema200
+             and ema21_slope > 0 and ema50_slope > 0
+bear_trend = red_mesh and ema50 < ema200
+             and ema21_slope < 0 and ema50_slope < 0
+
+// ─── SHARED ───────────────────────────────────────────────────────────────────
+no_pos       = strategy.position_size == 0
+in_long      = strategy.position_size > 0
+in_short     = strategy.position_size < 0
+adx_ok_long  = adx_val >= adx_long
+adx_ok_short = adx_val >= adx_short
+vol_ok_long  = volume  >= vol_ma * vol_long
+vol_ok_short = volume  >= vol_ma * vol_short
+
+// ─── CANDLE QUALITY ───────────────────────────────────────────────────────────
+candle_bull    = close > open and
+                 (close - low) / math.max(high - low, 0.001) >= 0.50
+candle_bear    = close < open and
+                 (high - close) / math.max(high - low, 0.001) >= 0.50
+bo_candle_bull = close > open and close >= high * 0.96
+bo_candle_bear = close < open and close <= low  * 1.04
+
+// ─── SIGNAL STRENGTH SCORE ────────────────────────────────────────────────────
+// Counts how many of 6 core long conditions are currently true
+// Shown on entry label so you know conviction level of each signal
+score_trend   = bull_trend          ? 1 : 0
+score_adx     = adx_ok_long         ? 1 : 0
+score_vol     = vol_ok_long         ? 1 : 0
+score_rsi_pb  = (rsi >= rsi_pb_long_lo and rsi <= rsi_pb_long_hi) ? 1 : 0
+score_candle  = candle_bull         ? 1 : 0
+score_weekly  = weekly_bull         ? 1 : 0
+signal_score  = score_trend + score_adx + score_vol + score_rsi_pb + score_candle + score_weekly
+
+score_trend_s  = bear_trend         ? 1 : 0
+score_adx_s    = adx_ok_short       ? 1 : 0
+score_vol_s    = vol_ok_short       ? 1 : 0
+score_rsi_s    = (rsi >= 45 and rsi <= 60) ? 1 : 0
+score_candle_s = candle_bear        ? 1 : 0
+score_weekly_s = weekly_bear        ? 1 : 0
+signal_score_s = score_trend_s + score_adx_s + score_vol_s + score_rsi_s
+                 + score_candle_s + score_weekly_s
+
+// ─── LONG SIGNALS ─────────────────────────────────────────────────────────────
+pb_zone_long    = low <= ema21 * pb_tol and close > ema21
+rsi_pb_long     = rsi >= rsi_pb_long_lo and rsi <= rsi_pb_long_hi
+pullback_long   = use_pb and bull_trend and pb_zone_long and rsi_pb_long
+                  and candle_bull and adx_ok_long and vol_ok_long
+
+swing_high      = ta.highest(high, bo_period)[1]
+rsi_bo_long     = rsi >= rsi_bo_long_lo and rsi <= rsi_bo_long_hi
+breakout_long   = use_bo and bull_trend and close > swing_high
+                  and rsi_bo_long and bo_candle_bull and adx_ok_long and vol_ok_long
+
+pb50_zone_long  = low <= ema50 * 1.005 and close > ema50
+                  and close > ema21 * 0.99
+rsi_pb50_long   = rsi >= 38 and rsi <= 55
+pullback50_long = use_pb and bull_trend and pb50_zone_long and rsi_pb50_long
+                  and candle_bull and adx_ok_long and vol_ok_long
+
+buy_signal = (pullback_long or breakout_long or pullback50_long) and no_pos
+
+// ─── SHORT SIGNALS ────────────────────────────────────────────────────────────
+di_dominance   = diminus - diplus >= di_gap_min
+swing_low_ref  = ta.lowest(low, room_bars)
+room_to_fall   = (close - swing_low_ref) >= atr * min_room_atr
+
+pb_zone_short  = high >= ema21 * 0.997 and close < ema21
+rsi_pb_short   = rsi >= 45 and rsi <= 60
+pullback_short = use_pb and bear_trend and pb_zone_short and rsi_pb_short
+                 and candle_bear and adx_ok_short and vol_ok_short
+                 and di_dominance and room_to_fall
+
+swing_low_bo   = ta.lowest(low, bo_period)[1]
+rsi_bo_short   = rsi >= 30 and rsi <= 50
+breakout_short = use_bo and bear_trend and close < swing_low_bo
+                 and rsi_bo_short and bo_candle_bear
+                 and adx_ok_short and vol_ok_short
+                 and di_dominance and room_to_fall
+
+sell_signal = (pullback_short or breakout_short) and no_pos
+
+// ─── TRAILING STOP LOGIC (unchanged) ──────────────────────────────────────────
+var float entry_price    = na
+var float trail_high     = na
+var float trail_low      = na
+var bool  trail_active_l = false
+var bool  trail_active_s = false
+
+if buy_signal
+    entry_price    := close
+    trail_high     := close
+    trail_active_l := false
+
+if sell_signal
+    entry_price    := close
+    trail_low      := close
+    trail_active_s := false
+
+if in_long
+    trail_high := math.max(trail_high, high)
+    if trail_high >= entry_price + atr * trail_atr
+        trail_active_l := true
+
+if in_short
+    trail_low := math.min(trail_low, low)
+    if trail_low <= entry_price - atr * trail_atr
+        trail_active_s := true
+
+trail_sl_long  = trail_active_l ? trail_high - atr * trail_offset : na
+trail_sl_short = trail_active_s ? trail_low  + atr * trail_offset : na
+
+// ─── EXITS (unchanged) ────────────────────────────────────────────────────────
+if in_long
+    sl_price = entry_price - atr * sl_mult
+    tp_price = entry_price + atr * tp_mult_long
+    if mesh_breaks_red
+        strategy.close("Long", comment="Mesh Break")
+    else if trail_active_l and low <= trail_sl_long
+        strategy.close("Long", comment="Trail Stop")
+    else if low <= sl_price
+        strategy.close("Long", comment="SL")
+    else if high >= tp_price
+        strategy.close("Long", comment="TP")
+
+if in_short
+    sl_price = entry_price + atr * sl_mult
+    tp_price = entry_price - atr * tp_short
+    if mesh_breaks_green
+        strategy.close("Short", comment="Mesh Break")
+    else if trail_active_s and high >= trail_sl_short
+        strategy.close("Short", comment="Trail Stop")
+    else if high >= sl_price
+        strategy.close("Short", comment="SL")
+    else if low <= tp_price
+        strategy.close("Short", comment="TP")
+
+// ─── ENTRIES (unchanged) ──────────────────────────────────────────────────────
+if buy_signal
+    strategy.entry("Long", strategy.long,
+         comment = pullback_long   ? "PB-L"   :
+                   pullback50_long ? "PB50-L" : "BO-L")
+
+if sell_signal
+    strategy.entry("Short", strategy.short,
+         comment = pullback_short ? "PB-S" : "BO-S")
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PRO UI LAYER — all visual additions below, zero logic change above
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── EMA PLOTS ────────────────────────────────────────────────────────────────
+e21_plot = plot(ema21,  "EMA 21",  color=color.new(color.green,  0), linewidth=2)
+e50_plot = plot(ema50,  "EMA 50",  color=color.new(color.blue,   0), linewidth=2)
+e200_plot = plot(ema200, "EMA 200", color=color.new(color.red,    0), linewidth=2)
+weeklyema50 = plot(weekly_ema50, "W EMA50", color=color.new(color.orange, 30), linewidth=1, style=plot.style_circles)
+
+// ─── MESH FILL ────────────────────────────────────────────────────────────────
+fill(e21_plot, e50_plot,
+     color = green_mesh ? color.new(color.green, 82) :
+             red_mesh   ? color.new(color.red,   82) : na,
+     title = "EMA Mesh")
+
+// ─── BACKGROUND TINT WHEN IN TRADE ───────────────────────────────────────────
+bgcolor(in_long  ? color.new(color.green, 93) : in_short ? color.new(color.red,   93) : na, title="Trade Background")
+
+// ─── MESH FLIP LABELS ─────────────────────────────────────────────────────────
+plotshape(mesh_breaks_green, "Mesh → Green",
+          shape.labelup, location.belowbar,
+          color.new(color.green, 0),
+          text="▲ BULL", textcolor=color.white, size=size.normal)
+
+plotshape(mesh_breaks_red, "Mesh → Red",
+          shape.labeldown, location.abovebar,
+          color.new(color.red, 0),
+          text="▼ BEAR", textcolor=color.white, size=size.normal)
+
+// ─── MESH BREAK EXIT MARKERS ──────────────────────────────────────────────────
+plotshape(mesh_breaks_red   and in_long,  "Mesh Break Long Exit",
+          shape.xcross, location.abovebar,
+          color.new(color.red, 0), size=size.small)
+plotshape(mesh_breaks_green and in_short, "Mesh Break Short Exit",
+          shape.xcross, location.belowbar,
+          color.new(color.lime, 0), size=size.small)
+
+// ─── ENTRY SIGNALS WITH PRICE + SCORE LABEL ───────────────────────────────────
+// Label format: "PB-L | 4892.50 | Score 5/6"
+long_label  = (pullback_long   ? "PB-L"   :
+               pullback50_long ? "PB50-L" : "BO-L") +
+              " | " + str.tostring(math.round(close, 2)) +
+              " | " + str.tostring(signal_score) + "/6"
+
+short_label = (pullback_short ? "PB-S" : "BO-S") +
+              " | " + str.tostring(math.round(close, 2)) +
+              " | " + str.tostring(signal_score_s) + "/6"
+
+plotshape(buy_signal,  "Long Entry",
+          shape.triangleup, location.belowbar,
+          color.new(color.lime, 0), text="", size=size.normal)
+
+plotshape(sell_signal, "Short Entry",
+          shape.triangledown, location.abovebar,
+          color.new(color.red, 0), text="", size=size.normal)
+
+// Entry labels with full detail — offset below/above the triangle
+if buy_signal
+    label.new(bar_index, low - atr * 0.4,
+         text=long_label,
+         color=color.new(color.green, 15),
+         textcolor=color.white,
+         style=label.style_label_up,
+         size=size.small)
+
+if sell_signal
+    label.new(bar_index, high + atr * 0.4,
+         text=short_label,
+         color=color.new(color.red, 15),
+         textcolor=color.white,
+         style=label.style_label_down,
+         size=size.small)
+
+// ─── SL / TP / TRAIL LINES ────────────────────────────────────────────────────
+plot(in_long  ? entry_price - atr * sl_mult      : na, "Long SL",
+     color.new(color.red,    0), style=plot.style_linebr, linewidth=1)
+plot(in_long  ? entry_price + atr * tp_mult_long : na, "Long TP",
+     color.new(color.green,  0), style=plot.style_linebr, linewidth=1)
+plot(in_short ? entry_price + atr * sl_mult      : na, "Short SL",
+     color.new(color.red,    0), style=plot.style_linebr, linewidth=1)
+plot(in_short ? entry_price - atr * tp_short     : na, "Short TP",
+     color.new(color.green,  0), style=plot.style_linebr, linewidth=1)
+
+plot(in_long  and trail_active_l ? trail_sl_long  : na, "Trail Long",
+     color.new(color.orange, 0), style=plot.style_linebr, linewidth=1)
+plot(in_short and trail_active_s ? trail_sl_short : na, "Trail Short",
+     color.new(color.orange, 0), style=plot.style_linebr, linewidth=1)
+
+// ─── PROFESSIONAL DASHBOARD TABLE ─────────────────────────────────────────────
+// Bigger, cleaner, sectioned — dark theme
+var table dash = table.new(position.top_right, 3, 18,
+     frame_width=2, frame_color=color.new(color.gray, 40),
+     border_width=1, border_color=color.new(color.gray, 60),
+     bgcolor=color.new(color.black, 70))
+
+// helper: row background colours
+col_header = color.new(color.gray,   50)
+col_section = color.new(color.gray,  70)
+col_val_neu = color.new(color.black, 70)
+
+if barstate.islast
+
+    // ── HEADER ROW ────────────────────────────────────────────────────────────
+    table.cell(dash, 0, 0, "NSE SWING v5",
+         bgcolor=color.new(color.blue, 30),
+         text_color=color.white, text_size=size.normal,
+         text_halign=text.align_center)
+    table.cell(dash, 1, 0, "3H · " + syminfo.ticker,
+         bgcolor=color.new(color.blue, 30),
+         text_color=color.new(color.gray, 20),
+         text_size=size.small, text_halign=text.align_center)
+    table.cell(dash, 2, 0, green_mesh ? "GREEN MESH" : "RED MESH",
+         bgcolor = green_mesh ? color.new(color.green, 30) :
+                               color.new(color.red,   30),
+         text_color=color.white, text_size=size.small,
+         text_halign=text.align_center)
+
+    // ── SECTION: MARKET CONTEXT ───────────────────────────────────────────────
+    table.cell(dash, 0, 1, "MARKET CONTEXT",
+         bgcolor=col_section, text_color=color.new(color.gray, 10),
+         text_size=size.small, text_halign=text.align_left)
+    table.cell(dash, 1, 1, "", bgcolor=col_section)
+    table.cell(dash, 2, 1, "", bgcolor=col_section)
+
+    table.cell(dash, 0, 2, "3H Trend",
+         text_color=color.new(color.gray, 20), text_size=size.small)
+    table.cell(dash, 1, 2, bull_trend ? "BULLISH" : bear_trend ? "BEARISH" : "FLAT",
+         text_color = bull_trend ? color.lime : bear_trend ? color.red : color.gray,
+         text_size=size.small, text_halign=text.align_center)
+    table.cell(dash, 2, 2,
+         bull_trend ? "EMA stack up" : bear_trend ? "EMA stack down" : "No stack",
+         text_color=color.new(color.gray, 30), text_size=size.tiny)
+
+    table.cell(dash, 0, 3, "Weekly",
+         text_color=color.new(color.gray, 20), text_size=size.small)
+    table.cell(dash, 1, 3, weekly_bull ? "BULL" : "BEAR",
+         text_color = weekly_bull ? color.lime : color.red,
+         text_size=size.small, text_halign=text.align_center)
+    table.cell(dash, 2, 3,
+         "EMA50: " + str.tostring(math.round(weekly_ema50, 1)),
+         text_color=color.new(color.gray, 30), text_size=size.tiny)
+
+    table.cell(dash, 0, 4, "Mesh duration",
+         text_color=color.new(color.gray, 20), text_size=size.small)
+    table.cell(dash, 1, 4, str.tostring(mesh_bars) + " bars",
+         text_color = mesh_bars >= 10 ? color.lime :
+                      mesh_bars >= 5  ? color.orange : color.gray,
+         text_size=size.small, text_halign=text.align_center)
+    table.cell(dash, 2, 4,
+         mesh_bars >= 10 ? "Strong trend" :
+         mesh_bars >= 5  ? "Developing"   : "Early",
+         text_color=color.new(color.gray, 30), text_size=size.tiny)
+
+    // ── SECTION: INDICATORS ───────────────────────────────────────────────────
+    table.cell(dash, 0, 5, "INDICATORS",
+         bgcolor=col_section, text_color=color.new(color.gray, 10),
+         text_size=size.small, text_halign=text.align_left)
+    table.cell(dash, 1, 5, "", bgcolor=col_section)
+    table.cell(dash, 2, 5, "", bgcolor=col_section)
+
+    table.cell(dash, 0, 6, "ADX",
+         text_color=color.new(color.gray, 20), text_size=size.small)
+    table.cell(dash, 1, 6, str.tostring(math.round(adx_val, 1)),
+         text_color = adx_val >= adx_short ? color.lime :
+                      adx_val >= adx_long  ? color.orange : color.red,
+         text_size=size.small, text_halign=text.align_center)
+    table.cell(dash, 2, 6,
+         adx_val >= 30 ? "Strong" : adx_val >= 20 ? "Moderate" : "Weak",
+         text_color=color.new(color.gray, 30), text_size=size.tiny)
+
+    table.cell(dash, 0, 7, "RSI",
+         text_color=color.new(color.gray, 20), text_size=size.small)
+    table.cell(dash, 1, 7, str.tostring(math.round(rsi, 1)),
+         text_color = rsi >= 70 ? color.red :
+                      rsi <= 30 ? color.lime : color.white,
+         text_size=size.small, text_halign=text.align_center)
+    table.cell(dash, 2, 7,
+         rsi >= 70 ? "Overbought" : rsi <= 30 ? "Oversold" : "Neutral",
+         text_color=color.new(color.gray, 30), text_size=size.tiny)
+
+    table.cell(dash, 0, 8, "DI- lead",
+         text_color=color.new(color.gray, 20), text_size=size.small)
+    table.cell(dash, 1, 8,
+         str.tostring(math.round(diminus - diplus, 1)),
+         text_color = (diminus - diplus) >= di_gap_min ? color.lime : color.red,
+         text_size=size.small, text_halign=text.align_center)
+    table.cell(dash, 2, 8,
+         (diminus - diplus) >= di_gap_min ? "Bear dominant" : "Not dominant",
+         text_color=color.new(color.gray, 30), text_size=size.tiny)
+
+    table.cell(dash, 0, 9, "Volume",
+         text_color=color.new(color.gray, 20), text_size=size.small)
+    table.cell(dash, 1, 9, vol_ok_long ? "YES" : "NO",
+         text_color = vol_ok_long ? color.lime : color.red,
+         text_size=size.small, text_halign=text.align_center)
+    table.cell(dash, 2, 9,
+         str.tostring(math.round(volume / vol_ma, 2)) + "x avg",
+         text_color=color.new(color.gray, 30), text_size=size.tiny)
+
+    // ── SECTION: SIGNAL ───────────────────────────────────────────────────────
+    table.cell(dash, 0, 10, "SIGNAL",
+         bgcolor=col_section, text_color=color.new(color.gray, 10),
+         text_size=size.small, text_halign=text.align_left)
+    table.cell(dash, 1, 10, "", bgcolor=col_section)
+    table.cell(dash, 2, 10, "", bgcolor=col_section)
+
+    table.cell(dash, 0, 11, "Signal score",
+         text_color=color.new(color.gray, 20), text_size=size.small)
+    table.cell(dash, 1, 11,
+         str.tostring(in_short ? signal_score_s : signal_score) + " / 6",
+         text_color = (in_short ? signal_score_s : signal_score) >= 5 ? color.lime :
+                      (in_short ? signal_score_s : signal_score) >= 4 ? color.orange : color.red,
+         text_size=size.small, text_halign=text.align_center)
+    table.cell(dash, 2, 11,
+         (in_short ? signal_score_s : signal_score) >= 5 ? "High conviction" :
+         (in_short ? signal_score_s : signal_score) >= 4 ? "Moderate"        : "Low",
+         text_color=color.new(color.gray, 30), text_size=size.tiny)
+
+    table.cell(dash, 0, 12, "ATR",
+         text_color=color.new(color.gray, 20), text_size=size.small)
+    table.cell(dash, 1, 12, str.tostring(math.round(atr, 2)),
+         text_color=color.white, text_size=size.small,
+         text_halign=text.align_center)
+    table.cell(dash, 2, 12,
+         str.tostring(math.round(atr / close * 100, 2)) + "% of price",
+         text_color=color.new(color.gray, 30), text_size=size.tiny)
+
+    // ── SECTION: TRADE ────────────────────────────────────────────────────────
+    table.cell(dash, 0, 13, "TRADE",
+         bgcolor=col_section, text_color=color.new(color.gray, 10),
+         text_size=size.small, text_halign=text.align_left)
+    table.cell(dash, 1, 13, "", bgcolor=col_section)
+    table.cell(dash, 2, 13, "", bgcolor=col_section)
+
+    table.cell(dash, 0, 14, "Position",
+         text_color=color.new(color.gray, 20), text_size=size.small)
+    table.cell(dash, 1, 14,
+         in_long  ? "LONG"  :
+         in_short ? "SHORT" : "FLAT",
+         text_color = in_long  ? color.lime :
+                      in_short ? color.red  : color.gray,
+         text_size=size.normal, text_halign=text.align_center)
+    table.cell(dash, 2, 14,
+         in_long or in_short ? "Active trade" : "Waiting for signal",
+         text_color=color.new(color.gray, 30), text_size=size.tiny)
+
+    table.cell(dash, 0, 15, "Entry price",
+         text_color=color.new(color.gray, 20), text_size=size.small)
+    table.cell(dash, 1, 15,
+         not na(entry_price) ? str.tostring(math.round(entry_price, 2)) : "–",
+         text_color = in_long  ? color.lime :
+                      in_short ? color.red  : color.gray,
+         text_size=size.small, text_halign=text.align_center)
+    table.cell(dash, 2, 15,
+         not na(entry_price) and in_long  ?
+             "SL " + str.tostring(math.round(entry_price - atr * sl_mult, 2)) :
+         not na(entry_price) and in_short ?
+             "SL " + str.tostring(math.round(entry_price + atr * sl_mult, 2)) : "–",
+         text_color=color.new(color.red, 10), text_size=size.tiny)
+
+    table.cell(dash, 0, 16, "Trail active",
+         text_color=color.new(color.gray, 20), text_size=size.small)
+    table.cell(dash, 1, 16,
+         trail_active_l or trail_active_s ? "YES" : "NO",
+         text_color = trail_active_l or trail_active_s ? color.lime : color.gray,
+         text_size=size.small, text_halign=text.align_center)
+    table.cell(dash, 2, 16,
+         in_long  and trail_active_l ?
+             "@ " + str.tostring(math.round(trail_sl_long,  2)) :
+         in_short and trail_active_s ?
+             "@ " + str.tostring(math.round(trail_sl_short, 2)) : "–",
+         text_color=color.new(color.orange, 10), text_size=size.tiny)
+
+    table.cell(dash, 0, 17, "Mesh bars",
+         text_color=color.new(color.gray, 20), text_size=size.small)
+    table.cell(dash, 1, 17, str.tostring(mesh_bars),
+         text_color = green_mesh ? color.lime : color.red,
+         text_size=size.small, text_halign=text.align_center)
+    table.cell(dash, 2, 17,
+         green_mesh ? "Green since " + str.tostring(mesh_bars) + "b" :
+                      "Red since "   + str.tostring(mesh_bars) + "b",
+         text_color=color.new(color.gray, 30), text_size=size.tiny)
