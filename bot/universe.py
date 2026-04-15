@@ -1,20 +1,11 @@
 """
 universe.py — Stock universe for the NSE swing screener.
 
-Coverage: ~750 liquid NSE stocks
-  — Nifty 50           (complete)
-  — Nifty Next 50      (complete)
-  — Nifty Midcap 150   (complete)
-  — Nifty Smallcap 250 (most liquid names)
-  — Sensex 30          (complete, subset of Nifty 50)
-  — Bank Nifty 12      (complete)
-  — Nifty FinNifty 20  (complete)
-  — Thematic clusters  (defence, railways, PSU banks, new-age tech,
-                        EV/renewables, gas distribution, aviation)
+Primary source : stocks_list.csv  (NSE equity list, one level above this file)
+                 Symbols are read from the SYMBOL column and suffixed with .NS
+                 for yfinance / Yahoo Finance format.
 
-All tickers use yfinance / Yahoo Finance format (e.g. "WIPRO.NS").
-To add  : append "TICKER.NS" to any section below.
-To remove: delete or comment out the line.
+Fallback       : The hardcoded WATCHLIST below is used when the CSV is absent.
 
 Tickers that fail data quality (>5 % missing bars) are auto-skipped by
 the pipeline — adding extras is safe.
@@ -22,7 +13,37 @@ the pipeline — adding extras is safe.
 NOTE: TATAMOTORS.NS excluded — Yahoo Finance data feed broken post-demerger.
 """
 
-WATCHLIST = [
+from pathlib import Path
+import csv
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def _load_from_csv() -> list[str]:
+    """Read SYMBOL column from stocks_list.csv and return yfinance tickers."""
+    csv_path = Path(__file__).parent.parent / "stocks_list.csv"
+    if not csv_path.exists():
+        return []
+    tickers = []
+    try:
+        with open(csv_path, newline="", encoding="utf-8-sig") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                symbol = row.get("SYMBOL", "").strip()
+                if symbol:
+                    tickers.append(f"{symbol}.NS")
+        logger.info("universe: loaded %d tickers from %s", len(tickers), csv_path.name)
+    except Exception as exc:
+        logger.warning("universe: could not read %s (%s) — falling back to hardcoded list", csv_path.name, exc)
+        return []
+    return tickers
+
+
+_CSV_WATCHLIST = _load_from_csv()
+
+# ── Hardcoded fallback (used only when stocks_list.csv is missing) ─────────────
+_FALLBACK_WATCHLIST = [
 
     # ══════════════════════════════════════════════════════════════════════
     # BANKING — PUBLIC SECTOR
@@ -299,8 +320,8 @@ WATCHLIST = [
 
 ]
 
-# Deduplicate (in case any ticker appears in multiple sections above)
-WATCHLIST = list(dict.fromkeys(WATCHLIST))
+# Use CSV if available, otherwise fall back to the hardcoded list
+WATCHLIST = list(dict.fromkeys(_CSV_WATCHLIST if _CSV_WATCHLIST else _FALLBACK_WATCHLIST))
 
 # ── Stocks with statistically NEGATIVE backtest edge (p < 0.05) ───────────────
 # Screener still scans these but marks the alert with a ⚠️ warning.
