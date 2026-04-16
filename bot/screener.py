@@ -13,7 +13,7 @@ import yfinance as yf
 from tqdm import tqdm
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from bot.universe import WATCHLIST, NEGATIVE_EDGE
+from bot.universe import WATCHLIST, NEGATIVE_EDGE, get_sector
 from bot.signal_engine import detect
 from bot.config import DATA_PERIOD, MIN_BARS
 
@@ -95,6 +95,7 @@ def run_scan(watchlist: list[str] = None, verbose: bool = True) -> list[dict]:
 
         for sig in signals:
             sig["negative_edge"] = (ticker in NEGATIVE_EDGE)
+            sig["sector"] = get_sector(ticker)
             alerts.append(sig)
 
     if failed and verbose:

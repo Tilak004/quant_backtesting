@@ -163,6 +163,13 @@ def _signal_card(sig: dict) -> str:
           {weekly_icon} {weekly_label}
         </td>
       </tr>
+      <tr>
+        <td style="padding:4px 16px 10px;font-size:12px;color:{_MUTED};">Sector</td>
+        <td style="padding:4px 16px 10px;text-align:right;">
+          <span style="background:#2c5282;color:#bee3f8;padding:2px 9px;border-radius:10px;
+                font-size:11px;font-weight:600;">{sig.get('sector','Other')}</span>
+        </td>
+      </tr>
 
       <!-- EMA levels for chart reference -->
       <tr>
@@ -172,6 +179,97 @@ def _signal_card(sig: dict) -> str:
             EMA50: ₹{sig['ema50']:,.2f} &nbsp;·&nbsp;
             EMA200: ₹{sig['ema200']:,.2f}
           </span>
+        </td>
+      </tr>
+    </table>"""
+
+
+# ── Sector distribution bar chart ─────────────────────────────────────────────
+def _sector_chart(signals: list[dict]) -> str:
+    """
+    Build an HTML horizontal bar chart showing how many signals
+    (LONG vs SHORT) came from each sector.
+    Returns an empty string if there are no signals.
+    """
+    if not signals:
+        return ""
+
+    from collections import Counter
+    long_counts:  Counter = Counter()
+    short_counts: Counter = Counter()
+    for s in signals:
+        sector = s.get("sector", "Other")
+        if s["direction"] == "LONG":
+            long_counts[sector] += 1
+        else:
+            short_counts[sector] += 1
+
+    all_sectors = sorted(
+        set(long_counts) | set(short_counts),
+        key=lambda sec: -(long_counts[sec] + short_counts[sec]),
+    )
+    max_total = max(long_counts[sec] + short_counts[sec] for sec in all_sectors) or 1
+
+    rows = []
+    for sec in all_sectors:
+        l = long_counts[sec]
+        s = short_counts[sec]
+        total = l + s
+        bar_pct = int(total / max_total * 100)
+        long_pct  = int(l / total * 100) if total else 0
+        short_pct = 100 - long_pct
+
+        badge_long  = (f'<span style="color:{_GREEN};font-size:11px;">▲{l}L</span> '
+                       if l else "")
+        badge_short = (f'<span style="color:{_RED};font-size:11px;">▼{s}S</span>'
+                       if s else "")
+
+        # Segmented bar: green portion = longs, red portion = shorts
+        green_w = int(bar_pct * long_pct / 100)
+        red_w   = bar_pct - green_w
+
+        rows.append(f"""
+        <tr>
+          <td style="width:38%;padding:5px 10px 5px 0;font-size:12px;
+                     color:#e2e8f0;white-space:nowrap;">{sec}</td>
+          <td style="width:48%;padding:5px 4px;">
+            <div style="display:flex;height:12px;border-radius:6px;overflow:hidden;
+                        background:#2d3748;width:100%;">
+              {'<div style="width:'+str(green_w)+'%;background:'+_GREEN+';"></div>' if green_w else ''}
+              {'<div style="width:'+str(red_w)+'%;background:'+_RED+';"></div>' if red_w else ''}
+            </div>
+          </td>
+          <td style="width:14%;padding:5px 0 5px 6px;font-size:11px;
+                     white-space:nowrap;">{badge_long}{badge_short}</td>
+        </tr>""")
+
+    rows_html = "".join(rows)
+    total_signals = len(signals)
+    long_total  = sum(1 for s in signals if s["direction"] == "LONG")
+    short_total = total_signals - long_total
+
+    return f"""
+    <!-- ── SECTOR DISTRIBUTION ───────────────────────────────── -->
+    <table width="100%" cellpadding="0" cellspacing="0"
+           style="background:{_CARD};border-radius:10px;margin-bottom:24px;
+                  border-left:5px solid {_BLUE};overflow:hidden;">
+      <tr>
+        <td colspan="3" style="padding:12px 16px 6px;background:{_DARK};">
+          <span style="font-size:15px;font-weight:700;color:{_WHITE};">
+            🗂 &nbsp;Sector Distribution
+          </span>
+          <span style="float:right;font-size:12px;color:{_MUTED};">
+            <span style="color:{_GREEN};">▲ {long_total} Long</span>
+            &nbsp;·&nbsp;
+            <span style="color:{_RED};">▼ {short_total} Short</span>
+          </span>
+        </td>
+      </tr>
+      <tr>
+        <td colspan="3" style="padding:2px 16px 10px;">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            {rows_html}
+          </table>
         </td>
       </tr>
     </table>"""
@@ -192,6 +290,7 @@ def _build_html(signals: list[dict], scan_date: str) -> str:
         "The screener ran successfully. No setups met the entry criteria today."
     )
 
+    sector_chart_html = _sector_chart(signals)
     cards_html = "".join(_signal_card(s) for s in signals) if n > 0 else f"""
     <p style="color:{_MUTED};text-align:center;padding:32px 0;font-size:15px;">
       📭 &nbsp; No trade setups today. The market is either choppy or no stocks
@@ -229,9 +328,10 @@ def _build_html(signals: list[dict], scan_date: str) -> str:
           </td>
         </tr>
 
-        <!-- Cards -->
+        <!-- Sector chart + Cards -->
         <tr>
           <td style="padding:20px 8px;">
+            {sector_chart_html}
             {cards_html}
           </td>
         </tr>
@@ -291,7 +391,7 @@ def send_alert(signals: list[dict]) -> bool:
     if signals:
         for s in signals:
             plain_lines += [
-                f"{s['emoji']} {s['ticker']}  |  {s['direction']}  |  {s['label']}  |  Score {s['score']}/6",
+                f"{s['emoji']} {s['ticker']}  |  {s['direction']}  |  {s['label']}  |  Score {s['score']}/6  |  {s.get('sector','Other')}",
                 f"   Entry ₹{s['entry']:,.2f}   SL ₹{s['sl']:,.2f} ({s['sl_pct']:+.1f}%)   TP ₹{s['tp']:,.2f} ({s['tp_pct']:+.1f}%)",
                 f"   R/R 1:{s['rr']}   ADX {s['adx']}   RSI {s['rsi']}   Vol {s['vol_ratio']:.1f}×",
                 "",
