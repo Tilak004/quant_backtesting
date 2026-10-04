@@ -97,7 +97,8 @@ indicators:
 # the (rejected) Nifty EMA200 regime filter did.
 #
 # Caveat: only 3 low-breadth years, and 2022 (mid-breadth) inverts the pattern.
-# Treat as a tested hypothesis, not a law. Off by default.
+# Treat as a tested hypothesis, not a law. Enabled here; the code default in
+# core/config.py is off, so it only runs when this file turns it on.
 breadth:
   breadth_gate_enabled: true
   breadth_min_pct:      20.0        # % of universe in bull_trend

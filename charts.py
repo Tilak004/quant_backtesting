@@ -174,10 +174,11 @@ def plot_trade_distribution(all_trades_df: pd.DataFrame) -> None:
 
 
 # ── 7. Monte Carlo fan chart ──────────────────────────────────────────────────
-def plot_mc_fan(median: np.ndarray,
-                p5: np.ndarray,
-                p95: np.ndarray,
-                actual_eq: pd.Series | None = None) -> None:
+def plot_mc_fan(mc: dict) -> None:
+    """Fan chart of a run_monte_carlo_portfolio() result, in account rupees."""
+    init    = mc["initial_equity"]
+    median  = mc["band_median"]
+    p5, p95 = mc["band_p5"], mc["band_p95"]
     x = np.arange(len(median))
     fig, ax = plt.subplots(figsize=(12, 5))
 
@@ -186,15 +187,13 @@ def plot_mc_fan(median: np.ndarray,
     ax.plot(x, p5,     color="#2980b9", lw=0.8, ls="--")
     ax.plot(x, p95,    color="#2980b9", lw=0.8, ls="--")
 
-    if actual_eq is not None and len(actual_eq) > 1:
-        # Scale actual equity to match x-axis (trades not dates)
-        ax.plot(np.linspace(0, len(median) - 1, len(actual_eq)),
-                actual_eq.values, color="black", lw=1.8, label="Actual")
-
-    ax.axhline(100, color="grey", ls="--", lw=1)
-    ax.set_title("Monte Carlo Equity Fan Chart (10 000 simulations)", fontsize=13)
-    ax.set_xlabel("Trade #")
-    ax.set_ylabel("Equity (start = 100)")
+    ax.axhline(init, color="grey", ls="--", lw=1, label="Starting capital")
+    ax.yaxis.set_major_formatter(mtick.FuncFormatter(lambda v, _: f"{v:,.0f}"))
+    ax.set_xlim(0, mc["horizon_days"])
+    ax.set_title(f"Monte Carlo — one-year portfolio projection "
+                 f"({mc['n_simulations']:,} paths)", fontsize=13)
+    ax.set_xlabel("Trading days ahead")
+    ax.set_ylabel("Account equity (Rs)")
     ax.legend()
     _save(fig, "07_monte_carlo_fan.png")
 

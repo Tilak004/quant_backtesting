@@ -91,11 +91,6 @@ def _col(series, pos=0):
         return None
 
 
-def _has_two_years(df) -> bool:
-    """True if we have at least two annual periods to compare."""
-    return df is not None and not df.empty and df.shape[1] >= 2
-
-
 # ── Data fetcher ──────────────────────────────────────────────────────────────
 
 def _fetch(ticker: str) -> dict:

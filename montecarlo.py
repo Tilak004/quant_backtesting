@@ -1,19 +1,15 @@
 """
 montecarlo.py — Monte Carlo simulation module.
 
-Two bootstraps live here and they answer different questions:
+run_monte_carlo_portfolio() resamples DAILY returns of the capital-constrained
+portfolio (core/portfolio.py), so its output describes a real account. The
+console summary and the fan chart both come from its paths.
 
-  run_monte_carlo_portfolio()  — resamples DAILY returns of the capital-
-      constrained portfolio (core/portfolio.py). This is the only one whose
-      output describes a real account. Use it for anything headline.
-
-  run_monte_carlo()            — resamples per-trade returns and compounds them
-      sequentially. That is a signal-quality diagnostic, NOT an account. The
-      backtester runs each ticker independently, so ~115 trades are open at once
-      at ~19.5% of equity each; chaining them implies roughly 22x leverage. It
-      is what produced the nonsense 10^22 equity and -99.5% drawdown figures in
-      earlier reports. Kept because the shape of the distribution is still
-      informative, but never report its equity levels.
+Never project by compounding per-trade returns one after another. The
+backtester runs each ticker independently, so ~115 trades are open at once at
+~19.5% of equity each; chaining them implies roughly 22x leverage. That is what
+produced the nonsense 10^22 equity and -99.5% drawdown figures in earlier
+reports.
 """
 
 import numpy as np
@@ -45,6 +41,10 @@ def run_monte_carlo_portfolio(daily_returns,
 
     Returns:
         dict of summary statistics, or None if there is too little history.
+        band_p5 / band_median / band_p95 are the per-day 5th/50th/95th
+        percentile equity paths, length horizon_days + 1, starting at
+        initial_equity on day 0. They come from the same paths as the
+        final-equity percentiles, so band_median[-1] == median_final_equity.
     """
     rets = np.asarray(daily_returns, dtype=np.float64)
     rets = rets[np.isfinite(rets)]
@@ -59,15 +59,22 @@ def run_monte_carlo_portfolio(daily_returns,
 
     final_equities = np.empty(n_simulations)
     max_drawdowns  = np.empty(n_simulations)
+    paths          = np.empty((n_simulations, horizon_days + 1))
+    paths[:, 0]    = initial_equity
 
     for sim in range(n_simulations):
         starts = rng.integers(0, n - block + 1, size=n_blocks)
         path = np.concatenate([rets[s:s + block] for s in starts])[:horizon_days]
         curve = initial_equity * np.cumprod(1.0 + path)
+        paths[sim, 1:] = curve
 
         final_equities[sim] = curve[-1]
+        # Peak starts at day 1, not initial_equity, so a day-1 loss is not
+        # counted. Kept as-is so reported drawdowns stay unchanged.
         peak = np.maximum.accumulate(curve)
         max_drawdowns[sim] = ((curve - peak) / peak * 100.0).min()
+
+    band_p5, band_median, band_p95 = np.percentile(paths, [5, 50, 95], axis=0)
 
     return dict(
         n_simulations       = n_simulations,
@@ -80,113 +87,31 @@ def run_monte_carlo_portfolio(daily_returns,
         p95_final_equity    = float(np.percentile(final_equities, 95)),
         mean_max_drawdown   = float(np.mean(max_drawdowns)),
         # Drawdowns are negative, so the drawdown exceeded only 5% of the time is
-        # the 5th percentile, not the 95th. run_monte_carlo() below takes the
-        # 95th, which reports the MILDEST tail and understates the risk.
+        # the 5th percentile, not the 95th. Taking the 95th would report the
+        # MILDEST tail and understate the risk.
         p95_max_drawdown    = float(np.percentile(max_drawdowns,  5)),
         pct_profitable      = float((final_equities > initial_equity).mean() * 100.0),
         final_equities      = final_equities,
         max_drawdowns       = max_drawdowns,
+        band_p5             = band_p5,
+        band_median         = band_median,
+        band_p95            = band_p95,
     )
-
-
-def run_monte_carlo(trade_pnls,
-                    n_simulations: int = 10_000,
-                    initial_equity: float = 100.0,
-                    seed: int = 42) -> dict | None:
-    """
-    Bootstrap Monte Carlo over per-trade returns — DIAGNOSTIC ONLY.
-
-    Compounds resampled trade returns sequentially, which assumes one position
-    at a time. The backtest violates that assumption badly (see module
-    docstring), so the equity levels this returns are not account figures.
-    Use run_monte_carlo_portfolio() for anything reported as a result.
-
-    Args:
-        trade_pnls     : 1-D array-like of trade PnL percentages.
-        n_simulations  : number of simulated paths.
-        initial_equity : starting equity value.
-        seed           : RNG seed for reproducibility.
-
-    Returns:
-        dict of simulation summary statistics, or None if too few trades.
-    """
-    pnls = np.asarray(trade_pnls, dtype=np.float64)
-    n_trades = len(pnls)
-    if n_trades < 10:
-        print("  [WARN] Too few trades for Monte Carlo — skipping.")
-        return None
-
-    factors = 1.0 + pnls / 100.0
-    rng     = np.random.default_rng(seed)
-
-    final_equities = np.empty(n_simulations)
-    max_drawdowns  = np.empty(n_simulations)
-
-    for sim in range(n_simulations):
-        sampled = rng.choice(factors, size=n_trades, replace=True)
-        curve   = initial_equity * np.cumprod(sampled)
-
-        final_equities[sim] = curve[-1]
-
-        peak = np.maximum.accumulate(curve)
-        dd   = (curve - peak) / peak * 100.0
-        max_drawdowns[sim] = dd.min()
-
-    pct_profitable = float((final_equities > initial_equity).mean() * 100.0)
-
-    return dict(
-        n_simulations       = n_simulations,
-        n_trades            = n_trades,
-        initial_equity      = initial_equity,
-        median_final_equity = float(np.median(final_equities)),
-        p5_final_equity     = float(np.percentile(final_equities,  5)),
-        p95_final_equity    = float(np.percentile(final_equities, 95)),
-        mean_max_drawdown   = float(np.mean(max_drawdowns)),
-        p95_max_drawdown    = float(np.percentile(max_drawdowns,  95)),
-        pct_profitable      = pct_profitable,
-        # Raw arrays for plotting
-        final_equities      = final_equities,
-        max_drawdowns       = max_drawdowns,
-    )
-
-
-def compute_mc_bands(trade_pnls,
-                     n_simulations: int = 1_000,
-                     initial_equity: float = 100.0,
-                     seed: int = 42) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
-    Compute median, 5th and 95th percentile equity paths for fan chart.
-
-    Returns:
-        (median_curve, p5_curve, p95_curve) — each of length n_trades+1.
-    """
-    pnls     = np.asarray(trade_pnls, dtype=np.float64)
-    n_trades = len(pnls)
-    if n_trades < 2:
-        dummy = np.full(n_trades + 1, initial_equity)
-        return dummy, dummy, dummy
-
-    factors    = 1.0 + pnls / 100.0
-    rng        = np.random.default_rng(seed)
-    all_curves = np.empty((n_simulations, n_trades + 1))
-    all_curves[:, 0] = initial_equity
-
-    for sim in range(n_simulations):
-        sampled           = rng.choice(factors, size=n_trades, replace=True)
-        all_curves[sim, 1:] = initial_equity * np.cumprod(sampled)
-
-    median = np.median(all_curves, axis=0)
-    p5     = np.percentile(all_curves,  5, axis=0)
-    p95    = np.percentile(all_curves, 95, axis=0)
-
-    return median, p5, p95
 
 
 def print_mc_summary(mc: dict) -> None:
-    print(f"\n  Monte Carlo ({mc['n_simulations']:,} sims × "
-          f"{mc['n_trades']} trades)")
-    print(f"  Median final equity : {mc['median_final_equity']:.1f}")
-    print(f"  5th pct  equity     : {mc['p5_final_equity']:.1f}")
-    print(f"  95th pct equity     : {mc['p95_final_equity']:.1f}")
-    print(f"  95th pct max DD     : {mc['p95_max_drawdown']:.1f} %")
+    """Console summary of a run_monte_carlo_portfolio() result."""
+    init = mc["initial_equity"]
+
+    def _eq(v: float) -> str:
+        return f"Rs {v:>14,.0f}  ({v / init - 1:+.1%})"
+
+    print(f"\n  Monte Carlo ({mc['n_simulations']:,} paths × "
+          f"{mc['horizon_days']} days, {mc['block_days']}-day blocks over "
+          f"{mc['n_observed_days']:,} observed days)")
+    print(f"  Median final equity : {_eq(mc['median_final_equity'])}")
+    print(f"  5th pct  equity     : {_eq(mc['p5_final_equity'])}")
+    print(f"  95th pct equity     : {_eq(mc['p95_final_equity'])}")
+    print(f"  Mean max drawdown   : {mc['mean_max_drawdown']:.1f} %")
+    print(f"  Worst-5% drawdown   : {mc['p95_max_drawdown']:.1f} %")
     print(f"  % Profitable paths  : {mc['pct_profitable']:.1f} %")

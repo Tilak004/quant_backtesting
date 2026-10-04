@@ -36,7 +36,6 @@ from core.portfolio import load_close_series
 
 ROOT = Path(__file__).resolve().parent.parent
 GOOD_YEARS = [2017, 2020, 2021, 2023]
-BAD_YEARS = [2018, 2022, 2025]
 
 
 def load_trades() -> pd.DataFrame:

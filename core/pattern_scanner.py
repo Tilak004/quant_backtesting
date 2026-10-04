@@ -58,12 +58,6 @@ def _swing_highs(high: pd.Series, n: int = 3) -> list[tuple[int, float]]:
     return out
 
 
-def _slope(series: pd.Series) -> float:
-    """Linear regression slope of a series."""
-    x = np.arange(len(series), dtype=float)
-    return float(np.polyfit(x, series.values, 1)[0])
-
-
 # ── Pattern 1: Double Bottom ──────────────────────────────────────────────────
 
 def detect_double_bottom(df: pd.DataFrame,
@@ -835,11 +829,10 @@ def detect_cup_and_handle(df: pd.DataFrame,
 
 def detect_inv_head_shoulders(df: pd.DataFrame,
                                lookback:  int   = 80,
-                               sym_tol:   float = 0.10,
-                               depth_tol: float = 0.05) -> Optional[dict]:
+                               sym_tol:   float = 0.10) -> Optional[dict]:
     """
     Three troughs: left shoulder, head (deepest), right shoulder.
-    Shoulders at similar price; head 10-30% lower.
+    Shoulders at similar price; head 8-40% lower.
     Neckline connects the peaks between the shoulders.
     """
     n = len(df)

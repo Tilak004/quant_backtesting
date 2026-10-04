@@ -319,7 +319,7 @@ quant_backtest/
 │   ├── engine.py              # run_backtest(df, cfg) → list[TradeResult]
 │   ├── analysis.py            # compute_metrics, breakdowns, equity curves
 │   ├── optimization.py        # run_grid_search, run_oos_evaluation
-│   ├── montecarlo.py          # run_monte_carlo, compute_mc_bands
+│   ├── montecarlo.py          # run_monte_carlo_portfolio, print_mc_summary
 │   └── charts.py              # all 11 chart generators
 │
 ├── screener/

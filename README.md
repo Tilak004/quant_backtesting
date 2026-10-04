@@ -209,9 +209,12 @@ quant_backtesting/
 │
 ├── tests/                    # Pytest test suite
 │   ├── conftest.py
+│   ├── test_backtester_fills.py
 │   ├── test_config.py
 │   ├── test_data.py
+│   ├── test_edge_reality_check.py
 │   ├── test_logging.py
+│   ├── test_montecarlo.py
 │   ├── test_paper_trader.py
 │   └── test_signals.py
 │
@@ -229,10 +232,10 @@ quant_backtesting/
 ├── backtester.py             # Bar-by-bar backtest engine
 ├── data.py                   # Yahoo Finance downloader + cache (869 NSE stocks)
 ├── indicators.py             # EMA, RSI, ADX, ATR, Volume, candle patterns
-├── analysis.py               # Sharpe, Sortino, drawdown, Monte Carlo stats
+├── analysis.py               # Sharpe, Sortino, drawdown, breakdowns, significance
 ├── charts.py                 # Matplotlib/Seaborn chart generation
 ├── optimization.py           # Walk-forward + grid search optimiser (108 combos)
-├── montecarlo.py             # Bootstrap Monte Carlo simulator (10k paths)
+├── montecarlo.py             # 1-yr block bootstrap of portfolio daily returns (10k paths)
 ├── dashboard.py              # Streamlit interactive dashboard
 ├── pipeline.py               # Unified Typer CLI (backtest / screen / both / config)
 ├── test_fundamental.py       # Fundamental scorer tests
@@ -371,6 +374,13 @@ pip install ruff && ruff check .
 ## Data source
 
 Historical data is fetched from **Yahoo Finance** via `yfinance` using `.NS` suffixed tickers (e.g. `WIPRO.NS`). No NSE subscription or scraping required. Daily OHLCV is cached to `data/raw/`; fundamental data is cached to `data/fundamentals/` for 90 days.
+
+---
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the checks CI runs, the
+OpenSpec change flow, and the rules reviewers enforce.
 
 ---
 

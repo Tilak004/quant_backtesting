@@ -17,6 +17,7 @@ import sys
 import os
 import argparse
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 # Ensure Unicode prints correctly on Windows terminals
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
@@ -60,7 +61,7 @@ def run(watchlist: list[str] | None = None,
         dry_run:   bool            = False) -> dict:
     """Callable entry-point used by pipeline.py and tests."""
     print("=" * 70)
-    print(f"  NSE Swing Screener  ·  {datetime.now().strftime('%d %b %Y  %H:%M IST')}")
+    print(f"  NSE Swing Screener  ·  {datetime.now(ZoneInfo('Asia/Kolkata')).strftime('%d %b %Y  %H:%M IST')}")
     print("=" * 70)
 
     result   = run_scan(watchlist=watchlist, verbose=True)

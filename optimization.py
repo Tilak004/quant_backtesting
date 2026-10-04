@@ -26,7 +26,6 @@ Expect the resulting numbers to be LOWER than the old ones. That is the point.
 Also here:
   - expected_max_sharpe(): the multiple-testing haircut. With N trials the best
     result is partly luck; this is the bar a winner must clear.
-  - rolling_walk_forward(): several independent OOS windows, not one split.
   - sensitivity_analysis(): prefer broad plateaus over narrow spikes.
 """
 
@@ -247,64 +246,6 @@ def run_oos_evaluation(ind_dfs: dict, best_params: dict,
         "ratio":       ratio,
         "overfit":     overfit,
     }
-
-
-# ── Rolling walk-forward ──────────────────────────────────────────────────────
-
-def rolling_walk_forward(ind_dfs: dict,
-                         folds: list[tuple[str, str, str]] | None = None,
-                         grid: dict | None = None,
-                         fixed: dict | None = None) -> dict:
-    """
-    Expanding-window walk-forward: optimise on everything before each test year,
-    then trade that year untouched. Several independent OOS windows instead of
-    one split — a parameter set that only wins in a single window is fitted.
-    """
-    if folds is None:
-        folds = [
-            ("2016-01-01", "2019-12-31", "2020"),
-            ("2016-01-01", "2020-12-31", "2021"),
-            ("2016-01-01", "2021-12-31", "2022"),
-            ("2016-01-01", "2022-12-31", "2023"),
-            ("2016-01-01", "2023-12-31", "2024"),
-            ("2016-01-01", "2024-12-31", "2025"),
-        ]
-
-    g      = grid if grid is not None else PARAM_GRID
-    keys   = list(g.keys())
-    combos = list(itertools.product(*g.values()))
-
-    print(f"\n  Rolling walk-forward: {len(folds)} folds x {len(combos)} combos")
-    rows = []
-    for tr_start, tr_end, test_year in folds:
-        best, best_sh = None, -1e9
-        for combo in combos:
-            p = load_config().to_params_dict()
-            if fixed:
-                p.update(fixed)
-            p.update(dict(zip(keys, combo)))
-            r = _run_combo(ind_dfs, p, tr_start, tr_end)
-            if r["sharpe"] > best_sh:
-                best_sh, best = r["sharpe"], p
-
-        te = _run_combo(ind_dfs, best, f"{test_year}-01-01", f"{test_year}-12-31")
-        rows.append({
-            "test_year": test_year, "is_sharpe": best_sh,
-            "oos_sharpe": te["sharpe"], "oos_cagr": te["cagr"],
-            "params": {k: best[k] for k in keys},
-        })
-        print(f"    {test_year}: IS {best_sh:6.2f} -> OOS {te['sharpe']:6.2f}  "
-              f"(CAGR {te['cagr']:6.1f}%)  {rows[-1]['params']}")
-
-    oos = [r["oos_sharpe"] for r in rows if r["oos_sharpe"] > -900]
-    if oos:
-        print(f"\n    mean OOS Sharpe {np.mean(oos):.2f}   "
-              f"positive folds {sum(s > 0 for s in oos)}/{len(oos)}")
-        stable = len({tuple(sorted(r['params'].items())) for r in rows})
-        print(f"    distinct winning parameter sets: {stable}/{len(rows)} "
-              f"({'stable' if stable <= 2 else 'UNSTABLE — parameters are fitting noise'})")
-
-    return {"folds": rows}
 
 
 # ── Sensitivity analysis ──────────────────────────────────────────────────────

@@ -25,7 +25,7 @@ from sklearn.metrics import (precision_recall_fscore_support,
 try:
     import xgboost as xgb
 except ImportError:
-    raise ImportError("pip install xgboost")
+    raise ImportError("pip install xgboost") from None
 
 from core.ml.feature_builder import FEATURE_COLS, build_features
 
@@ -213,7 +213,6 @@ def train_final_model(features: pd.DataFrame,
 # ── Live scoring ──────────────────────────────────────────────────────────────
 
 _cached_model: xgb.XGBClassifier | None = None
-_cached_threshold: float = 0.55
 
 
 def score_signal(sig: dict) -> float:
@@ -221,14 +220,11 @@ def score_signal(sig: dict) -> float:
     Score a live signal dict. Returns P(win) in [0, 1].
     Returns 0.5 (neutral) if no model is available.
     """
-    global _cached_model, _cached_threshold
+    global _cached_model
     if _cached_model is None:
         if not MODEL_PATH.exists():
             return 0.5
         _cached_model = joblib.load(MODEL_PATH)
-        if THRESH_PATH.exists():
-            with open(THRESH_PATH) as _f:
-                _cached_threshold = json.load(_f).get("threshold", 0.55)
 
     enc = {"PB-L": 0, "BO-L": 1, "BASE-BO": 2, "PB50-L": 3, "PB-S": 4, "BO-S": 5}
     # Callers disagree on case ("long" in the backtester, "LONG" in the screener),
@@ -249,14 +245,6 @@ def score_signal(sig: dict) -> float:
     ]], dtype=np.float32)
 
     return round(float(_cached_model.predict_proba(row)[0][1]), 3)
-
-
-def get_threshold() -> float:
-    global _cached_threshold
-    if THRESH_PATH.exists():
-        with open(THRESH_PATH) as _f:
-            _cached_threshold = json.load(_f).get("threshold", 0.55)
-    return _cached_threshold
 
 
 # ── Backtest impact measurement ───────────────────────────────────────────────
