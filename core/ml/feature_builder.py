@@ -31,7 +31,6 @@ _RAW     = Path("data/raw")
 
 SIGNAL_ENC = {"PB-L": 0, "BO-L": 1, "BASE-BO": 2, "PB50-L": 3,
               "PB-S": 4, "BO-S": 5}
-EXIT_ENC   = {"SL": 0, "MeshBreak": 1, "TP": 2, "Trail": 1}
 
 FEATURE_COLS = [
     "signal_type_enc", "direction", "rsi", "adx", "vol_ratio",

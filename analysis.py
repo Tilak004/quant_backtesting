@@ -340,25 +340,6 @@ def compute_universe_breadth(ind_dfs: dict[str, pd.DataFrame],
     return (m.mean(axis=1) * 100.0).rename("breadth_pct")
 
 
-def compute_monthly_returns(eq_series: pd.Series) -> pd.DataFrame:
-    """
-    Convert equity series to a Year × Month pivot of monthly returns (%).
-    """
-    monthly = eq_series.resample("ME").last().pct_change() * 100
-    monthly = monthly.dropna()
-    df = pd.DataFrame({
-        "year":  monthly.index.year,
-        "month": monthly.index.month,
-        "ret":   monthly.values,
-    })
-    pivot = df.pivot(index="year", columns="month", values="ret")
-    pivot.columns = [
-        "Jan","Feb","Mar","Apr","May","Jun",
-        "Jul","Aug","Sep","Oct","Nov","Dec"
-    ][:pivot.columns.max()]
-    return pivot
-
-
 # ── Nifty rolling correlation ─────────────────────────────────────────────────
 def nifty_rolling_corr(portfolio_eq: pd.Series,
                        nifty_df: pd.DataFrame,

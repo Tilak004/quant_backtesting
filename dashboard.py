@@ -593,7 +593,6 @@ with tab_screen:
                 h = s.get("hist") or {}
                 hist_str = (f"📊 {h['n']} trades · {h['wr']:.0f}% WR · avg {h['avg_pnl']:+.1f}%"
                             if h and h.get("n",0) >= 5 else "")
-                score_pct = s['score'] / 7 * 100
                 score_col = "#10b981" if s['score']>=6 else "#fbbf24" if s['score']>=4 else "#ef4444"
 
                 # ── Fundamental quality badge ──────────────────────────────
@@ -612,7 +611,6 @@ with tab_screen:
                 fund_parts = []
                 qroe = s.get("qual_roe")
                 qrg  = s.get("qual_rev_growth")
-                qroa = s.get("qual_roa_cur")
                 qcfo = s.get("qual_cfo_gt_ni")
                 if qroe is not None:
                     fund_parts.append(f"ROE {qroe*100:.1f}%")
@@ -971,7 +969,6 @@ with tab_paper:
                     tier_order = [t for t in ["HIGH","MEDIUM","LOW","UNKNOWN"] if t in bq]
                     wr_vals  = [bq[t]["wr"]  for t in tier_order]
                     n_vals   = [bq[t]["n"]   for t in tier_order]
-                    avg_vals = [bq[t]["avg"] for t in tier_order]
 
                     fig_bq = go.Figure(go.Bar(
                         x=tier_order, y=wr_vals,
@@ -1146,7 +1143,6 @@ with tab_analytics:
         pnl_col = "pnl_on_equity" if "pnl_on_equity" in trades.columns else "pnl_pct"
 
         # ── Top-level stats ───────────────────────────────────────────────────
-        total_pnl = trades[pnl_col].sum()
         wr_all    = (trades["pnl_pct"] > 0).mean() * 100
         gross_p   = trades[trades["pnl_pct"]>0]["pnl_pct"].sum()
         gross_l   = abs(trades[trades["pnl_pct"]<=0]["pnl_pct"].sum())
@@ -1322,7 +1318,6 @@ with tab_fundamentals:
         from data import TICKERS
         to_fetch = TICKERS
         prog_f   = st.progress(0, text="Starting prefetch...")
-        info_f   = st.empty()
         results_f = {}
         for i, t in enumerate(to_fetch):
             prog_f.progress((i+1)/len(to_fetch), text=f"Fetching {t.replace('.NS','')} ({i+1}/{len(to_fetch)})")

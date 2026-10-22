@@ -14,3 +14,5 @@ tqdm>=4.65
 typer>=0.9
 xgboost>=2.0
 yfinance>=0.2
+matplotlib>=3.7
+seaborn>=0.13

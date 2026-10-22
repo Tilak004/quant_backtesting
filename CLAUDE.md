@@ -49,7 +49,7 @@ Three-tier quantitative trading system for NSE (Indian equities):
 | Email alert builder | `bot/notifier.py` |
 | Paper trading | `core/paper_trader.py` |
 | Walk-forward optimisation | `optimization.py` |
-| Monte Carlo simulation | `montecarlo.py` |
+| Monte Carlo projection (portfolio daily-return bootstrap, summary, fan chart) | `montecarlo.py`, `charts.py` (`plot_mc_fan`) |
 | Portfolio replay (capital limit, liquidity) | `core/portfolio.py`, `tools/run_portfolio.py` |
 | Backtest fill model (entry/exit fills, gaps) | `backtester.py` (`execution:` in `strategy.yaml`) |
 | Shared backtest input prep (cache, indicators, regime) | `core/backtest_inputs.py` |
@@ -102,6 +102,11 @@ ruff check .                   # linting (pip install ruff; zero errors expected
   `trades_*.csv` (`core/ml/feature_builder.py` does).
 - **Slippage of 0.05%/side is optimistic** for the illiquid tail of the universe.
   The edge disappears near 1% round-trip. Check with `tools/liquidity_screen.py`.
+- **Never Monte Carlo by chaining per-trade returns.** Compounding trades one
+  after another reproduces the ~22x pooled leverage (old 10^22 equity
+  figures). `run_monte_carlo_portfolio()` block-bootstraps the
+  capital-limited portfolio's daily returns; the summary and fan chart must
+  both come from those paths. Spec: `openspec/specs/monte-carlo-projection/`.
 - **Ranking trades by an in-sample model is lookahead.** Use
   `walk_forward_scores()` from `core/ml/xgb_scorer.py`, never the production
   model's own scores, when a score decides which trades to take.

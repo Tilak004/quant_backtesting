@@ -28,8 +28,7 @@ from analysis     import (compute_metrics, compute_equity_curve,
                           adjusted_z_test, build_trade_return_matrix,
                           nifty_rolling_corr, print_metrics)
 from optimization import run_grid_search, run_oos_evaluation, sensitivity_analysis
-from montecarlo   import (run_monte_carlo_portfolio, compute_mc_bands,
-                          print_mc_summary)
+from montecarlo   import run_monte_carlo_portfolio, print_mc_summary
 from core.portfolio import simulate_portfolio
 from charts       import (plot_equity_curves, plot_drawdown,
                           plot_monthly_heatmap, plot_winrate_by_year,
@@ -230,7 +229,6 @@ def main(force_download: bool = False, skip_optim: bool = False) -> None:
     _hdr(7, "Portfolio Replay & Monte Carlo")
     port_result = None
     mc_result   = None
-    mc_bands    = (None, None, None)
     _cfg     = load_config()
     _mc_init = _cfg.starting_capital
     try:
@@ -250,22 +248,24 @@ def main(force_download: bool = False, skip_optim: bool = False) -> None:
                   f"({pm['fill_rate']:.1f}% fill)")
             print(f"  CAGR {pm['cagr']:.2f}%   Sharpe {pm['sharpe']:.2f}   "
                   f"MaxDD {pm['max_dd']:.2f}%   TotRet {pm['total_return']:.1f}%")
+    except Exception as exc:
+        print(f"  [WARN] Portfolio replay failed: {exc}")
 
+    # Separate blocks so one failure does not hide the steps after it. The fan
+    # chart (stage 9) is drawn from mc_result even if the summary print fails.
+    if port_result is not None:
+        try:
             daily = port_result.equity.pct_change().dropna()
             mc_result = run_monte_carlo_portfolio(
                 daily.values, horizon_days=250, n_simulations=10_000,
                 initial_equity=_mc_init)
-            if mc_result:
-                print_mc_summary(mc_result)
-            # Fan-chart bands stay trade-based: they are a shape diagnostic, not
-            # an account projection.
-            _mc_col = "pnl_on_equity" if "pnl_on_equity" in combined_df.columns \
-                      else "pnl_pct"
-            mc_bands = compute_mc_bands(combined_df[_mc_col].values,
-                                        n_simulations=1_000,
-                                        initial_equity=_mc_init)
-    except Exception as exc:
-        print(f"  [WARN] Portfolio replay / Monte Carlo failed: {exc}")
+        except Exception as exc:
+            print(f"  [WARN] Monte Carlo failed: {exc}")
+    if mc_result:
+        try:
+            print_mc_summary(mc_result)
+        except Exception as exc:
+            print(f"  [WARN] Monte Carlo summary failed: {exc}")
 
     # ── STAGE 8: Correlation & Regime ─────────────────────────────────────────
     _hdr(8, "Correlation & Regime Analysis")
@@ -288,9 +288,8 @@ def main(force_download: bool = False, skip_optim: bool = False) -> None:
             plot_winrate_by_year(combined_df)
             plot_pf_by_signal(combined_df)
             plot_trade_distribution(combined_df)
-        if mc_bands[0] is not None:
-            actual_eq = compute_equity_curve(combined_df)
-            plot_mc_fan(*mc_bands, actual_eq=actual_eq)
+        if mc_result:
+            plot_mc_fan(mc_result)
         if sens_results:
             plot_sensitivity(sens_results)
         if not trade_return_matrix.empty:

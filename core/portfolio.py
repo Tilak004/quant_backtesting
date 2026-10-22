@@ -59,12 +59,6 @@ _CLOSE_CACHE: dict[str, pd.Series | None] = {}
 _TURNOVER_CACHE: dict[tuple[str, int], pd.Series | None] = {}
 
 
-def clear_caches() -> None:
-    """Drop cached price/turnover series (call if data/raw changes mid-process)."""
-    _CLOSE_CACHE.clear()
-    _TURNOVER_CACHE.clear()
-
-
 def load_close_series(ticker: str) -> pd.Series | None:
     """Daily closes for a ticker from the shared cache. None if unavailable."""
     if ticker in _CLOSE_CACHE:

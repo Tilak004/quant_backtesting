@@ -585,7 +585,7 @@ def send_alert(signals: list[dict], patterns: list[dict] | None = None) -> bool:
     if signals:
         for s in signals:
             plain_lines += [
-                f"{s['emoji']} {s['ticker']}  |  {s['direction']}  |  {s['label']}  |  Score {s['score']}/6  |  {s.get('sector','Other')}",
+                f"{s['emoji']} {s['ticker']}  |  {s['direction']}  |  {s['label']}  |  Score {s['score']}/7  |  {s.get('sector','Other')}",
                 f"   Entry ₹{s['entry']:,.2f}   SL ₹{s['sl']:,.2f} ({s['sl_pct']:+.1f}%)   TP ₹{s['tp']:,.2f} ({s['tp_pct']:+.1f}%)",
                 f"   R/R 1:{s['rr']}   ADX {s['adx']}   RSI {s['rsi']}   Vol {s['vol_ratio']:.1f}×",
                 "",
